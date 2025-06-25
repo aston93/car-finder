@@ -9,18 +9,15 @@ import CarCard from '../CarCard';
 
 const mockCar = {
   id: 1,
-  brand: 'Toyota',
+  make: 'Toyota',
   model: 'Camry',
-  series: 'Hybrid',
   year: 2023,
   price: 95000,
-  mileage_km: 15000,
-  mileage_miles: 9320,
-  engine_cm3: 2500,
-  car_status: 'odpala i jezdzi',
-  location_status: 'na miejscu',
-  photos: ['https://example.com/photo1.jpg'],
-  created_at: '2023-06-01T10:00:00Z'
+  mileage: 15000,
+  fuel_type: 'Hybrid',
+  transmission: 'Automatyczna',
+  location: 'Warszawa',
+  image_url: 'https://example.com/photo1.jpg'
 };
 
 const renderCarCard = (car = mockCar, props = {}) => {
@@ -33,89 +30,90 @@ const renderCarCard = (car = mockCar, props = {}) => {
 
 describe('CarCard', () => {
   describe('Basic Information Display', () => {
-    test('renders car brand and model correctly', () => {
+    test('renders car make and model correctly', () => {
       renderCarCard();
       
-      expect(screen.getByText('Toyota Camry')).toBeInTheDocument();
+      expect(screen.getByText('2023 Toyota Camry')).toBeInTheDocument();
     });
 
-    test('renders car series when available', () => {
+    test('renders fuel type when available', () => {
       renderCarCard();
       
       expect(screen.getByText(/Hybrid/)).toBeInTheDocument();
     });
 
-    test('handles missing series gracefully', () => {
-      const carWithoutSeries = { ...mockCar, series: null };
-      renderCarCard(carWithoutSeries);
+    test('handles missing fuel type gracefully', () => {
+      const carWithoutFuelType = { ...mockCar, fuel_type: null };
+      renderCarCard(carWithoutFuelType);
       
-      expect(screen.getByText('Toyota Camry')).toBeInTheDocument();
+      expect(screen.getByText('2023 Toyota Camry')).toBeInTheDocument();
       expect(screen.queryByText(/Hybrid/)).not.toBeInTheDocument();
     });
 
     test('renders year correctly', () => {
       renderCarCard();
       
-      expect(screen.getByText('2023')).toBeInTheDocument();
+      expect(screen.getByText(/2023/)).toBeInTheDocument();
     });
 
     test('renders price in correct format', () => {
       renderCarCard();
       
-      expect(screen.getByText(/95,000/)).toBeInTheDocument();
+      expect(screen.getByText(/95 000/)).toBeInTheDocument();
+      expect(screen.getByText(/zł/)).toBeInTheDocument();
     });
 
     test('renders mileage in kilometers', () => {
       renderCarCard();
       
-      expect(screen.getByText(/15,000 km/)).toBeInTheDocument();
+      expect(screen.getByText(/15 000 km/)).toBeInTheDocument();
     });
   });
 
   describe('Photo Display', () => {
-    test('displays first car photo when available', () => {
+    test('displays car photo when available', () => {
       renderCarCard();
       
       const image = screen.getByRole('img');
       expect(image).toHaveAttribute('src', 'https://example.com/photo1.jpg');
-      expect(image).toHaveAttribute('alt', expect.stringContaining('Toyota Camry'));
+      expect(image).toHaveAttribute('alt', 'Toyota Camry');
     });
 
-    test('displays placeholder when no photos available', () => {
-      const carWithoutPhotos = { ...mockCar, photos: [] };
-      renderCarCard(carWithoutPhotos);
+    test('displays placeholder when no photo available', () => {
+      const carWithoutPhoto = { ...mockCar, image_url: null };
+      renderCarCard(carWithoutPhoto);
       
-      expect(screen.getByText(/no photo/i)).toBeInTheDocument();
+      expect(screen.getByText(/Zdjęcie Toyota Camry/)).toBeInTheDocument();
     });
   });
 
-  describe('Status Indicators', () => {
-    test('displays car status correctly', () => {
+  describe('Car Details', () => {
+    test('displays transmission correctly', () => {
       renderCarCard();
       
-      expect(screen.getByText(/odpala i jezdzi/)).toBeInTheDocument();
+      expect(screen.getByText(/Automatyczna/)).toBeInTheDocument();
     });
 
-    test('displays location status correctly', () => {
+    test('displays location when available', () => {
       renderCarCard();
       
-      expect(screen.getByText(/na miejscu/)).toBeInTheDocument();
+      expect(screen.getByText(/Warszawa/)).toBeInTheDocument();
     });
   });
 
   describe('Price Formatting', () => {
-    test('formats large prices with commas', () => {
+    test('formats large prices with spaces', () => {
       const expensiveCar = { ...mockCar, price: 1500000 };
       renderCarCard(expensiveCar);
       
-      expect(screen.getByText(/1,500,000/)).toBeInTheDocument();
+      expect(screen.getByText(/1 500 000/)).toBeInTheDocument();
     });
 
     test('handles decimal prices correctly', () => {
       const carWithDecimal = { ...mockCar, price: 95000.50 };
       renderCarCard(carWithDecimal);
       
-      expect(screen.getByText(/95,000/)).toBeInTheDocument();
+      expect(screen.getByText(/95 001/)).toBeInTheDocument(); // PLN formatting rounds up
     });
   });
 

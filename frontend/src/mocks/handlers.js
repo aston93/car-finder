@@ -2,7 +2,7 @@ import { rest } from 'msw';
 
 const API_BASE = 'http://localhost:8000';
 
-// Sample car data for testing
+// Sample car data for testing (matching backend API structure)
 const sampleCars = [
   {
     id: 1,
