@@ -1,0 +1,881 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: frontend-nginx-config
+  namespace: default
+data:
+  nginx.conf: |
+    server {
+        listen 80;
+        server_name localhost;
+        root /usr/share/nginx/html;
+        index index.html;
+
+        # Gzip compression
+        gzip on;
+        gzip_vary on;
+        gzip_min_length 1024;
+        gzip_types text/plain text/css text/xml text/javascript application/javascript application/xml+rss application/json;
+
+        # Security headers
+        add_header X-Frame-Options "SAMEORIGIN" always;
+        add_header X-XSS-Protection "1; mode=block" always;
+        add_header X-Content-Type-Options "nosniff" always;
+
+        # Handle React Router
+        location / {
+            try_files $uri $uri/ /index.html;
+        }
+
+        # Health check endpoint
+        location /health {
+            access_log off;
+            return 200 "healthy\n";
+            add_header Content-Type text/plain;
+        }
+
+        # Deny access to hidden files
+        location ~ /\. {
+            deny all;
+        }
+    }
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: frontend-build-files
+  namespace: default
+data:
+  index.html: |
+    <!DOCTYPE html>
+    <html lang="pl">
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <meta name="theme-color" content="#000000" />
+        <meta name="description" content="Car Finder - Znajdź swój idealny samochód" />
+        <title>Car Finder - Platforma Ogłoszeń Samochodowych</title>
+        <style>
+            * {
+                margin: 0;
+                padding: 0;
+                box-sizing: border-box;
+            }
+            body {
+                font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
+                background-color: #f5f5f5;
+                color: #333;
+                line-height: 1.6;
+            }
+            .container {
+                max-width: 1200px;
+                margin: 0 auto;
+                padding: 0 20px;
+            }
+            .header {
+                background-color: #2c3e50;
+                color: white;
+                padding: 1rem 0;
+                box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            }
+            .header .container {
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+            }
+            .logo {
+                font-size: 1.5rem;
+                font-weight: bold;
+                color: white;
+                text-decoration: none;
+            }
+            .nav {
+                display: flex;
+                gap: 2rem;
+            }
+            .nav a {
+                color: white;
+                text-decoration: none;
+                padding: 0.5rem 1rem;
+                border-radius: 4px;
+                transition: background-color 0.3s;
+            }
+            .nav a:hover {
+                background-color: rgba(255, 255, 255, 0.1);
+            }
+            .hero {
+                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                color: white;
+                text-align: center;
+                padding: 4rem 0;
+            }
+            .hero h1 {
+                font-size: 3rem;
+                margin-bottom: 1rem;
+            }
+            .hero p {
+                font-size: 1.2rem;
+                margin-bottom: 2rem;
+                max-width: 600px;
+                margin-left: auto;
+                margin-right: auto;
+            }
+            .search-form {
+                max-width: 800px;
+                margin: 2rem auto;
+                background: white;
+                padding: 2rem;
+                border-radius: 8px;
+                box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            }
+            .form-row {
+                display: grid;
+                grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+                gap: 1rem;
+                margin-bottom: 1rem;
+            }
+            .form-group {
+                display: flex;
+                flex-direction: column;
+            }
+            .form-group label {
+                margin-bottom: 0.5rem;
+                font-weight: 500;
+                color: #333;
+            }
+            .form-group input,
+            .form-group select {
+                padding: 0.75rem;
+                border: 1px solid #ddd;
+                border-radius: 4px;
+                font-size: 16px;
+            }
+            .btn-primary {
+                background-color: #007bff;
+                color: white;
+                padding: 0.75rem 1.5rem;
+                border: none;
+                border-radius: 4px;
+                cursor: pointer;
+                font-size: 16px;
+            }
+            .btn-primary:hover {
+                background-color: #0056b3;
+            }
+            .btn-danger {
+                background-color: #dc3545;
+                color: white;
+                padding: 0.75rem 1.5rem;
+                border: none;
+                border-radius: 4px;
+                cursor: pointer;
+                font-size: 16px;
+            }
+            .btn-danger:hover {
+                background-color: #c82333;
+            }
+            .cars-grid {
+                display: grid;
+                grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+                gap: 2rem;
+                padding: 2rem 0;
+            }
+            .car-card {
+                background: white;
+                border-radius: 8px;
+                box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+                overflow: hidden;
+                transition: transform 0.3s;
+                cursor: pointer;
+            }
+            .car-card:hover {
+                transform: translateY(-2px);
+            }
+            .car-image {
+                width: 100%;
+                height: 200px;
+                background-color: #f0f0f0;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                color: #666;
+            }
+            .car-info {
+                padding: 1.5rem;
+            }
+            .car-title {
+                font-size: 1.2rem;
+                font-weight: 600;
+                margin-bottom: 0.5rem;
+                color: #2c3e50;
+            }
+            .car-price {
+                font-size: 1.4rem;
+                font-weight: bold;
+                color: #e74c3c;
+                margin-bottom: 0.5rem;
+            }
+            .car-details {
+                color: #666;
+                margin-bottom: 1rem;
+            }
+            .footer {
+                background-color: #2c3e50;
+                color: white;
+                text-align: center;
+                padding: 2rem 0;
+                margin-top: 3rem;
+            }
+            .status-banner {
+                background: #d4edda;
+                color: #155724;
+                padding: 15px;
+                text-align: center;
+                font-weight: bold;
+                border-radius: 4px;
+                margin: 2rem auto;
+                max-width: 800px;
+            }
+            /* Car Detail Page Styles */
+            .car-detail-layout {
+                display: grid;
+                grid-template-columns: 1fr 1fr;
+                gap: 3rem;
+                margin: 2rem 0;
+            }
+            .car-photos .main-photo {
+                border-radius: 8px;
+                overflow: hidden;
+                box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+            }
+            .car-info-detail h1 {
+                font-size: 2.2rem;
+                color: #2c3e50;
+                margin-bottom: 0.5rem;
+            }
+            .car-series {
+                color: #666;
+                font-size: 1.1rem;
+                margin-bottom: 1.5rem;
+            }
+            .price-section {
+                background: linear-gradient(135deg, #e74c3c, #c0392b);
+                color: white;
+                padding: 1.5rem;
+                border-radius: 8px;
+                margin-bottom: 2rem;
+            }
+            .main-price {
+                font-size: 2rem;
+                font-weight: bold;
+                margin-bottom: 0.25rem;
+            }
+            .price-subtitle {
+                opacity: 0.9;
+                font-size: 0.9rem;
+            }
+            .key-details {
+                margin-bottom: 2rem;
+            }
+            .key-details h3 {
+                color: #2c3e50;
+                margin-bottom: 1rem;
+                font-size: 1.3rem;
+            }
+            .details-grid {
+                display: grid;
+                gap: 0.75rem;
+            }
+            .detail-item {
+                display: grid;
+                grid-template-columns: 150px 1fr;
+                padding: 0.75rem;
+                background: #f8f9fa;
+                border-radius: 4px;
+                border-left: 4px solid #007bff;
+            }
+            .detail-label {
+                font-weight: 600;
+                color: #495057;
+            }
+            .detail-value {
+                color: #2c3e50;
+            }
+            .contact-section {
+                background: #f8f9fa;
+                padding: 1.5rem;
+                border-radius: 8px;
+                border: 2px solid #e9ecef;
+            }
+            .contact-section h3 {
+                color: #2c3e50;
+                margin-bottom: 1rem;
+            }
+            .contact-buttons {
+                display: grid;
+                gap: 0.75rem;
+                margin-bottom: 1rem;
+            }
+            .contact-btn {
+                padding: 0.75rem 1.5rem;
+                font-size: 1rem;
+                border-radius: 6px;
+                border: none;
+                cursor: pointer;
+                transition: all 0.3s;
+                text-align: center;
+            }
+            .contact-note {
+                color: #666;
+                text-align: center;
+                margin: 0;
+            }
+            @media (max-width: 768px) {
+                .header .container {
+                    flex-direction: column;
+                    gap: 1rem;
+                }
+                .hero h1 {
+                    font-size: 2rem;
+                }
+                .form-row {
+                    grid-template-columns: 1fr;
+                }
+                .cars-grid {
+                    grid-template-columns: 1fr;
+                }
+                .car-detail-layout {
+                    grid-template-columns: 1fr;
+                    gap: 2rem;
+                }
+                .detail-item {
+                    grid-template-columns: 1fr;
+                    gap: 0.25rem;
+                }
+                .car-info-detail h1 {
+                    font-size: 1.8rem;
+                }
+                .main-price {
+                    font-size: 1.6rem;
+                }
+            }
+        </style>
+    </head>
+    <body>
+        <header class="header">
+            <div class="container">
+                <div class="logo">🚗 Car Finder</div>
+                <nav class="nav">
+                    <a href="#home">Strona główna</a>
+                    <a href="#search">Szukaj</a>
+                    <a href="#add">Dodaj ogłoszenie</a>
+                    <a href="#login">Zaloguj się</a>
+                </nav>
+            </div>
+        </header>
+
+        <main>
+            <!-- Homepage Content -->
+            <div id="homePage">
+                <section class="hero">
+                    <div class="container">
+                        <h1>Znajdź swój idealny samochód</h1>
+                        <p>
+                            Przeglądaj tysiące ogłoszeń samochodowych i znajdź najlepsze oferty 
+                            od zaufanych sprzedawców w całej Polsce.
+                        </p>
+
+                        <div class="status-banner">
+                            ✅ Demo wersja - Aplikacja działa na GKE w środowisku DEV!
+                        </div>
+
+                        <form class="search-form" onsubmit="return false;">
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label for="make">Marka</label>
+                                    <select id="make" name="make">
+                                        <option value="">Wszystkie marki</option>
+                                        <option value="Audi">Audi</option>
+                                        <option value="BMW">BMW</option>
+                                        <option value="Ford">Ford</option>
+                                        <option value="Honda">Honda</option>
+                                        <option value="Mercedes">Mercedes</option>
+                                        <option value="Toyota">Toyota</option>
+                                        <option value="Volkswagen">Volkswagen</option>
+                                    </select>
+                                </div>
+
+                                <div class="form-group">
+                                    <label for="model">Model</label>
+                                    <input type="text" id="model" name="model" placeholder="np. Golf, Passat">
+                                </div>
+
+                                <div class="form-group">
+                                    <label for="price">Cena do (PLN)</label>
+                                    <input type="number" id="price" name="price" placeholder="100000">
+                                </div>
+
+                                <div class="form-group">
+                                    <label>&nbsp;</label>
+                                    <button type="submit" class="btn-primary" onclick="showSearch()">
+                                        🔍 Szukaj samochodów
+                                    </button>
+                                </div>
+                            </div>
+                        </form>
+                    </div>
+                </section>
+
+                <section class="container">
+                    <h2 style="text-align: center; margin: 3rem 0 2rem 0; font-size: 2rem;">
+                        Najnowsze oferty
+                    </h2>
+
+                    <div class="cars-grid" id="carsGrid">
+                        <!-- Cars will be populated by JavaScript -->
+                    </div>
+                </section>
+            </div>
+
+            <!-- Car Detail Page -->
+            <div id="carDetailPage" style="display: none;">
+                <section class="container">
+                    <div style="margin: 2rem 0;">
+                        <button onclick="goHome()" class="btn-secondary">
+                            ← Powrót do listy samochodów
+                        </button>
+                    </div>
+
+                    <div id="carDetailContent">
+                        <!-- Car details will be loaded here -->
+                    </div>
+                </section>
+            </div>
+        </main>
+
+        <footer class="footer">
+            <div class="container">
+                <p>&copy; 2025 Car Finder. Wszystkie prawa zastrzeżone.</p>
+                <p>Platforma do kupna i sprzedaży samochodów - Demo wersja na GKE</p>
+            </div>
+        </footer>
+
+        <script>
+            // API Configuration
+            const API_BASE_URL = 'http://34.12.88.58:8000';
+            
+            // API functions
+            async function fetchLatestCars() {
+                try {
+                    const response = await fetch(`${API_BASE_URL}/cars?limit=9`);
+                    if (!response.ok) {
+                        throw new Error('Failed to fetch cars');
+                    }
+                    return await response.json();
+                } catch (error) {
+                    console.error('Error fetching cars:', error);
+                    throw error; // Re-throw to handle in UI
+                }
+            }
+
+            function formatPrice(price) {
+                return new Intl.NumberFormat('pl-PL', {
+                    style: 'currency',
+                    currency: 'PLN',
+                    minimumFractionDigits: 0
+                }).format(price);
+            }
+
+            function createCarCard(car) {
+                return `
+                    <div class="car-card" onclick="goToCarDetail(${car.id})">
+                        <div class="car-image">
+                            📷 ${car.brand} ${car.model}
+                        </div>
+                        <div class="car-info">
+                            <h3 class="car-title">${car.year} ${car.brand} ${car.model}</h3>
+                            <div class="car-price">${formatPrice(car.price)}</div>
+                            <div class="car-details">
+                                <p><strong>Przebieg:</strong> ${car.mileage_km.toLocaleString('pl-PL')} km</p>
+                                <p><strong>Silnik:</strong> ${car.engine_cm3} cm³</p>
+                                <p><strong>Status:</strong> ${car.car_status}</p>
+                                <p><strong>Lokalizacja:</strong> ${car.location_status}</p>
+                            </div>
+                            <div style="margin-top: 1rem;">
+                                <button class="btn-primary" style="padding: 0.5rem 1rem; font-size: 14px;">
+                                    📄 Zobacz szczegóły
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }
+
+            async function loadLatestCars() {
+                const carsGrid = document.getElementById('carsGrid');
+                carsGrid.innerHTML = '<p style="text-align: center; color: #666; padding: 2rem;">🔄 Ładowanie najnowszych samochodów z bazy danych...</p>';
+                
+                try {
+                    const cars = await fetchLatestCars();
+                    if (cars.length === 0) {
+                        carsGrid.innerHTML = '<p style="text-align: center; color: #666; padding: 2rem;">📭 Brak samochodów w bazie danych.<br><small>Dodaj pierwszy samochód przez API!</small></p>';
+                        return;
+                    }
+                    
+                    const carsHtml = cars.map(car => createCarCard(car)).join('');
+                    carsGrid.innerHTML = carsHtml;
+                    
+                    // Update section title to show count
+                    const sectionTitle = document.querySelector('h2');
+                    sectionTitle.innerHTML = `Najnowsze oferty <small style="color: #666;">(${cars.length} z bazy danych)</small>`;
+                    
+                } catch (error) {
+                    carsGrid.innerHTML = '<p style="text-align: center; color: #e74c3c; padding: 2rem;">❌ Błąd podczas ładowania samochodów z bazy danych<br><small>Sprawdź połączenie z API</small></p>';
+                }
+            }
+
+            // Navigation functions
+            function goToCarDetail(carId) {
+                window.history.pushState({page: 'car', id: carId}, '', `#car/${carId}`);
+                showCarDetailPage(carId);
+            }
+
+            function goHome() {
+                window.history.pushState({page: 'home'}, '', '#');
+                showHomePage();
+            }
+
+            function showHomePage() {
+                document.getElementById('homePage').style.display = 'block';
+                document.getElementById('carDetailPage').style.display = 'none';
+            }
+
+            function showCarDetailPage(carId) {
+                document.getElementById('homePage').style.display = 'none';
+                document.getElementById('carDetailPage').style.display = 'block';
+                loadCarDetail(carId);
+            }
+
+            // Load car detail data
+            async function loadCarDetail(carId) {
+                const content = document.getElementById('carDetailContent');
+                content.innerHTML = '<div style="text-align: center; padding: 3rem;"><p>🔄 Ładowanie szczegółów samochodu...</p></div>';
+
+                try {
+                    const response = await fetch(`${API_BASE_URL}/cars/${carId}`);
+                    if (!response.ok) {
+                        throw new Error('Car not found');
+                    }
+                    
+                    const car = await response.json();
+                    renderCarDetail(car);
+                } catch (error) {
+                    content.innerHTML = '<div style="text-align: center; padding: 3rem;"><p style="color: #e74c3c;">❌ Nie można załadować szczegółów samochodu</p><button onclick="goHome()" class="btn-primary">Powrót do strony głównej</button></div>';
+                }
+            }
+
+            // Render car detail page
+            function renderCarDetail(car) {
+                const content = document.getElementById('carDetailContent');
+                const currentUrl = window.location.href;
+                
+                content.innerHTML = `
+                    <div class="car-detail-layout">
+                        <!-- Car Photos Section -->
+                        <div class="car-photos">
+                            ${renderPhotoGallery(car)}
+                            
+                            <!-- Photo Upload Section -->
+                            <div class="photo-upload" style="margin-top: 1rem; padding: 1rem; background: #f8f9fa; border-radius: 8px; border: 2px dashed #dee2e6;">
+                                <h4 style="margin-bottom: 0.5rem; color: #495057;">Dodaj zdjęcia (max 10)</h4>
+                                <input type="file" id="photoUpload" accept="image/*" multiple style="margin-bottom: 0.5rem;">
+                                <button onclick="uploadPhotos(${car.id})" class="btn-secondary" style="width: 100%;">
+                                    📸 Dodaj zdjęcia
+                                </button>
+                                <p style="font-size: 0.8rem; color: #666; margin: 0.5rem 0 0 0;">
+                                    Akceptowane formaty: JPG, PNG. Maksymalnie 10 zdjęć na ogłoszenie.
+                                </p>
+                            </div>
+                        </div>
+
+                        <!-- Car Information Section -->
+                        <div class="car-info-detail">
+                            <h1>${car.year} ${car.brand} ${car.model}</h1>
+                            ${car.series ? `<p class="car-series">Seria: ${car.series}</p>` : ''}
+                            
+                            <div class="price-section">
+                                <div class="main-price">${formatPrice(car.price)}</div>
+                                <div class="price-subtitle">Cena do negocjacji</div>
+                            </div>
+
+                            <!-- Key Details -->
+                            <div class="key-details">
+                                <h3>Podstawowe informacje</h3>
+                                <div class="details-grid">
+                                    <div class="detail-item">
+                                        <span class="detail-label">Przebieg:</span>
+                                        <span class="detail-value">${car.mileage_km.toLocaleString('pl-PL')} km (${car.mileage_miles.toLocaleString('pl-PL')} mil)</span>
+                                    </div>
+                                    <div class="detail-item">
+                                        <span class="detail-label">Rok produkcji:</span>
+                                        <span class="detail-value">${car.year}</span>
+                                    </div>
+                                    <div class="detail-item">
+                                        <span class="detail-label">Pojemność silnika:</span>
+                                        <span class="detail-value">${car.engine_cm3} cm³</span>
+                                    </div>
+                                    <div class="detail-item">
+                                        <span class="detail-label">Stan techniczny:</span>
+                                        <span class="detail-value">${car.car_status}</span>
+                                    </div>
+                                    <div class="detail-item">
+                                        <span class="detail-label">Lokalizacja:</span>
+                                        <span class="detail-value">${car.location_status}</span>
+                                    </div>
+                                    <div class="detail-item">
+                                        <span class="detail-label">Dodano:</span>
+                                        <span class="detail-value">${new Date(car.created_at).toLocaleDateString('pl-PL')}</span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Contact Section -->
+                            <div class="contact-section">
+                                <h3>Kontakt ze sprzedawcą</h3>
+                                <div class="contact-buttons">
+                                    <button class="btn-primary contact-btn" onclick="contactSeller(${car.id})">
+                                        📞 Zadzwoń do sprzedawcy
+                                    </button>
+                                    <button class="btn-secondary contact-btn" onclick="copyCarLink(${car.id})">
+                                        🔗 Skopiuj link
+                                    </button>
+                                </div>
+                                <p class="contact-note">
+                                    <small>💡 Wspomniaj, że znalazłeś to ogłoszenie na Car Finder</small>
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }
+            
+            // Photo gallery rendering
+            function renderPhotoGallery(car) {
+                const photos = car.photos || [];
+                
+                if (photos.length === 0) {
+                    return `
+                        <div class="main-photo">
+                            <div style="width: 100%; height: 300px; background: linear-gradient(135deg, #f5f5f5, #e0e0e0); display: flex; align-items: center; justify-content: center; border-radius: 8px; color: #666; font-size: 1.2rem;">
+                                📷 Brak zdjęć
+                                <br><small style="font-size: 0.8rem; margin-top: 0.5rem;">Dodaj pierwsze zdjęcie!</small>
+                            </div>
+                        </div>
+                        <div class="photo-thumbnails" style="margin-top: 1rem;">
+                            <p style="text-align: center; color: #999;">Dodaj zdjęcia aby pokazać samochód</p>
+                        </div>
+                    `;
+                }
+                
+                // Sort photos by order
+                const sortedPhotos = photos.sort((a, b) => a.order - b.order);
+                const mainPhoto = sortedPhotos[0];
+                
+                return `
+                    <div class="main-photo">
+                        <img id="mainPhotoImg" src="${mainPhoto.url}" alt="${car.brand} ${car.model}" 
+                             style="width: 100%; height: 300px; object-fit: cover; border-radius: 8px; cursor: pointer;"
+                             onclick="openPhotoModal('${mainPhoto.url}')">
+                        <div class="photo-actions" style="position: absolute; top: 10px; right: 10px; display: flex; gap: 0.5rem;">
+                            <button onclick="deletePhoto(${car.id}, '${mainPhoto.id}')" class="btn-danger" style="padding: 0.25rem 0.5rem; font-size: 0.8rem;">
+                                🗑️ Usuń
+                            </button>
+                        </div>
+                    </div>
+                    <div class="photo-thumbnails" style="margin-top: 1rem; display: grid; grid-template-columns: repeat(auto-fit, minmax(60px, 1fr)); gap: 0.5rem;">
+                        ${sortedPhotos.map((photo, index) => `
+                            <div style="position: relative;">
+                                <img src="${photo.url}" alt="Zdjęcie ${index + 1}" 
+                                     style="width: 100%; aspect-ratio: 1; object-fit: cover; border-radius: 4px; cursor: pointer; ${index === 0 ? 'border: 2px solid #007bff;' : ''}"
+                                     onclick="setMainPhoto('${photo.url}')">
+                                <button onclick="deletePhoto(${car.id}, '${photo.id}')" 
+                                        style="position: absolute; top: 2px; right: 2px; background: rgba(255,0,0,0.8); color: white; border: none; border-radius: 50%; width: 20px; height: 20px; font-size: 10px; cursor: pointer;">
+                                    ×
+                                </button>
+                            </div>
+                        `).join('')}
+                    </div>
+                `;
+            }
+            
+            // Photo management functions
+            function setMainPhoto(photoUrl) {
+                const mainImg = document.getElementById('mainPhotoImg');
+                if (mainImg) {
+                    mainImg.src = photoUrl;
+                    // Update thumbnail borders
+                    document.querySelectorAll('.photo-thumbnails img').forEach(img => {
+                        img.style.border = img.src === photoUrl ? '2px solid #007bff' : '';
+                    });
+                }
+            }
+            
+            function openPhotoModal(photoUrl) {
+                // Simple modal for full-size photo viewing
+                const modal = `
+                    <div style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.9); z-index: 10000; display: flex; align-items: center; justify-content: center;" onclick="this.remove()">
+                        <img src="${photoUrl}" style="max-width: 90%; max-height: 90%; object-fit: contain;">
+                        <button onclick="this.parentElement.remove()" style="position: absolute; top: 20px; right: 20px; background: white; border: none; border-radius: 50%; width: 40px; height: 40px; font-size: 20px; cursor: pointer;">×</button>
+                    </div>
+                `;
+                document.body.insertAdjacentHTML('beforeend', modal);
+            }
+            
+            async function uploadPhotos(carId) {
+                const fileInput = document.getElementById('photoUpload');
+                const files = fileInput.files;
+                
+                if (files.length === 0) {
+                    alert('Wybierz zdjęcia do przesłania');
+                    return;
+                }
+                
+                for (let file of files) {
+                    try {
+                        await uploadSinglePhoto(carId, file);
+                    } catch (error) {
+                        console.error('Upload error:', error);
+                        alert(`Błąd podczas przesyłania ${file.name}: ${error.message}`);
+                    }
+                }
+                
+                // Refresh the car detail page
+                loadCarDetail(carId);
+                fileInput.value = '';
+            }
+            
+            async function uploadSinglePhoto(carId, file) {
+                // Get upload URL
+                const uploadUrlResponse = await fetch(`${API_BASE_URL}/cars/${carId}/photos/upload-url`, {
+                    method: 'POST'
+                });
+                
+                if (!uploadUrlResponse.ok) {
+                    throw new Error('Nie można uzyskać URL do przesłania');
+                }
+                
+                const {upload_url, photo_id} = await uploadUrlResponse.json();
+                
+                // Upload file to Cloud Storage
+                const uploadResponse = await fetch(upload_url, {
+                    method: 'PUT',
+                    body: file,
+                    headers: {
+                        'Content-Type': 'image/jpeg'
+                    }
+                });
+                
+                if (!uploadResponse.ok) {
+                    throw new Error('Nie można przesłać pliku');
+                }
+                
+                // Complete upload
+                const completeResponse = await fetch(`${API_BASE_URL}/cars/${carId}/photos`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        photo_id: photo_id,
+                        filename: file.name
+                    })
+                });
+                
+                if (!completeResponse.ok) {
+                    throw new Error('Nie można zakończyć przesyłania');
+                }
+                
+                return completeResponse.json();
+            }
+            
+            async function deletePhoto(carId, photoId) {
+                if (!confirm('Czy na pewno chcesz usunąć to zdjęcie?')) {
+                    return;
+                }
+                
+                try {
+                    const response = await fetch(`${API_BASE_URL}/cars/${carId}/photos/${photoId}`, {
+                        method: 'DELETE'
+                    });
+                    
+                    if (!response.ok) {
+                        throw new Error('Nie można usunąć zdjęcia');
+                    }
+                    
+                    // Refresh the car detail page
+                    loadCarDetail(carId);
+                } catch (error) {
+                    alert('Błąd podczas usuwania zdjęcia: ' + error.message);
+                }
+            }
+
+            // Contact and sharing functions
+            function contactSeller(carId) {
+                alert('📞 Kontakt ze sprzedawcą\\n\\nTelefon: +48 123 456 789\\nEmail: sprzedawca@example.com\\n\\n💡 W pełnej wersji tutaj będą prawdziwe dane kontaktowe sprzedawcy!');
+            }
+
+            function copyCarLink(carId) {
+                const url = `${window.location.origin}${window.location.pathname}#car/${carId}`;
+                
+                if (navigator.clipboard) {
+                    navigator.clipboard.writeText(url).then(() => {
+                        alert('🔗 Link skopiowany!\\n\\n' + url);
+                    }).catch(() => {
+                        showLinkDialog(url);
+                    });
+                } else {
+                    showLinkDialog(url);
+                }
+            }
+
+            function showLinkDialog(url) {
+                const result = prompt('Skopiuj link do samochodu:', url);
+            }
+
+            function showSearch() {
+                alert('Funkcja wyszukiwania - demo wersja!\\n\\nW pełnej wersji tutaj będzie zaawansowane wyszukiwanie z filtrami i sortowaniem.');
+            }
+
+            // Handle browser navigation
+            window.addEventListener('popstate', function(event) {
+                if (event.state) {
+                    if (event.state.page === 'car') {
+                        showCarDetailPage(event.state.id);
+                    } else {
+                        showHomePage();
+                    }
+                } else {
+                    showHomePage();
+                }
+            });
+
+            // Initialize page based on URL hash
+            function initializePage() {
+                const hash = window.location.hash;
+                if (hash.startsWith('#car/')) {
+                    const carId = hash.split('/')[1];
+                    if (carId) {
+                        showCarDetailPage(carId);
+                        return;
+                    }
+                }
+                // Default to homepage and load latest cars
+                showHomePage();
+                loadLatestCars();
+            }
+
+            // Load page when DOM is ready
+            document.addEventListener('DOMContentLoaded', initializePage);
+        </script>
+    </body>
+    </html>

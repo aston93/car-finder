@@ -1,0 +1,101 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: car-finder-backend
+  namespace: default
+  labels:
+    app: car-finder-backend
+    environment: dev
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: car-finder-backend
+  template:
+    metadata:
+      labels:
+        app: car-finder-backend
+        environment: dev
+    spec:
+      containers:
+      - name: backend
+        image: python:3.11-slim
+        command: ["/bin/bash"]
+        args: ["-c", "pip install fastapi uvicorn sqlalchemy psycopg2-binary python-multipart pydantic google-cloud-storage Pillow && cd /app && uvicorn main:app --host 0.0.0.0 --port 8000"]
+        ports:
+        - containerPort: 8000
+        env:
+        - name: DB_HOST
+          valueFrom:
+            secretKeyRef:
+              name: backend-database-secrets
+              key: DB_HOST
+        - name: DB_PORT
+          valueFrom:
+            secretKeyRef:
+              name: backend-database-secrets
+              key: DB_PORT
+        - name: DB_USERNAME
+          valueFrom:
+            secretKeyRef:
+              name: backend-database-secrets
+              key: DB_USERNAME
+        - name: DB_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: backend-database-secrets
+              key: DB_PASSWORD
+        - name: DB_NAME
+          valueFrom:
+            secretKeyRef:
+              name: backend-database-secrets
+              key: DB_NAME
+        - name: GOOGLE_APPLICATION_CREDENTIALS
+          value: "/var/secrets/google/key.json"
+        resources:
+          requests:
+            memory: "128Mi"
+            cpu: "100m"
+          limits:
+            memory: "256Mi"
+            cpu: "200m"
+        volumeMounts:
+        - name: backend-code
+          mountPath: /app
+        - name: gcp-service-account-volume
+          mountPath: /var/secrets/google
+        livenessProbe:
+          httpGet:
+            path: /
+            port: 8000
+          initialDelaySeconds: 60
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /
+            port: 8000
+          initialDelaySeconds: 30
+          periodSeconds: 5
+      volumes:
+      - name: backend-code
+        configMap:
+          name: backend-code-files
+      - name: gcp-service-account-volume
+        secret:
+          secretName: gcp-service-account-key
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: car-finder-backend-service
+  namespace: default
+  labels:
+    app: car-finder-backend
+spec:
+  type: LoadBalancer
+  selector:
+    app: car-finder-backend
+  ports:
+  - port: 8000
+    targetPort: 8000
+    protocol: TCP

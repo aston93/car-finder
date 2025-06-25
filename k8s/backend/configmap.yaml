@@ -1,0 +1,284 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: backend-code-files
+  namespace: default
+data:
+  main.py: |
+    from fastapi import FastAPI, HTTPException, Depends, UploadFile, File
+    from fastapi.middleware.cors import CORSMiddleware
+    from sqlalchemy import create_engine, Column, Integer, String, Float, DateTime, JSON
+    from sqlalchemy.ext.declarative import declarative_base
+    from sqlalchemy.orm import sessionmaker, Session
+    from pydantic import BaseModel
+    from datetime import datetime
+    from typing import Optional, List
+    import os
+    import json
+    from google.cloud import storage
+
+    # Database setup
+    def get_database_url():
+        # Check if individual env vars are available (preferred)
+        db_host = os.getenv("DB_HOST")
+        db_port = os.getenv("DB_PORT")
+        db_username = os.getenv("DB_USERNAME")
+        db_password = os.getenv("DB_PASSWORD")
+        db_name = os.getenv("DB_NAME")
+        
+        print(f"Debug - DB_HOST: {db_host}")
+        print(f"Debug - DB_PORT: {db_port}")
+        print(f"Debug - DB_USERNAME: {db_username}")
+        print(f"Debug - DB_PASSWORD: {'***' if db_password else None}")
+        print(f"Debug - DB_NAME: {db_name}")
+        
+        if all([db_host, db_port, db_username, db_password, db_name]):
+            from urllib.parse import quote_plus
+            # URL encode the password to handle special characters
+            encoded_password = quote_plus(db_password)
+            database_url = f"postgresql://{db_username}:{encoded_password}@{db_host}:{db_port}/{db_name}"
+            print(f"Debug - Using PostgreSQL: {database_url.replace(encoded_password, '***')}")
+            return database_url
+        
+        # Fallback to single DATABASE_URL env var or SQLite
+        fallback_url = os.getenv("DATABASE_URL", "sqlite:///./cars.db")
+        print(f"Debug - Using fallback: {fallback_url}")
+        return fallback_url
+
+    DATABASE_URL = get_database_url()
+    engine = create_engine(DATABASE_URL)
+    SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+    Base = declarative_base()
+
+    # Car model (SQLAlchemy)
+    class Car(Base):
+        __tablename__ = "cars"
+        
+        id = Column(Integer, primary_key=True, index=True)
+        brand = Column(String, nullable=False)
+        model = Column(String, nullable=False) 
+        series = Column(String, nullable=True)
+        year = Column(Integer, nullable=False)
+        mileage_km = Column(Integer, nullable=False)
+        mileage_miles = Column(Integer, nullable=False)
+        engine_cm3 = Column(Integer, nullable=False)
+        car_status = Column(String, nullable=False)  # stacjonarny / odpala / odpala i jezdzi
+        location_status = Column(String, nullable=False)  # na miejscu / w drodze
+        price = Column(Float, nullable=False)
+        photos = Column(JSON, nullable=True, default=lambda: [])
+        created_at = Column(DateTime, default=datetime.utcnow)
+
+    # Pydantic models
+    class CarBase(BaseModel):
+        brand: str
+        model: str
+        series: Optional[str] = None
+        year: int
+        mileage_km: int
+        engine_cm3: int
+        car_status: str
+        location_status: str
+        price: float
+
+    class CarCreate(CarBase):
+        pass
+
+    class CarResponse(CarBase):
+        id: int
+        mileage_miles: int
+        photos: Optional[List[str]] = []
+        created_at: datetime
+        
+        class Config:
+            from_attributes = True
+
+    # Create tables
+    Base.metadata.create_all(bind=engine)
+
+    # Cloud Storage setup
+    BUCKET_NAME = "car-finder-dev-photos"
+    try:
+        storage_client = storage.Client()
+        bucket = storage_client.bucket(BUCKET_NAME)
+    except Exception as e:
+        print(f"Warning: Could not initialize Cloud Storage: {e}")
+        storage_client = None
+        bucket = None
+
+    # FastAPI app
+    app = FastAPI(title="Car Finder API", version="1.0.0")
+
+    # CORS middleware
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=["*"],
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
+
+    # Dependency to get DB session
+    def get_db():
+        db = SessionLocal()
+        try:
+            yield db
+        finally:
+            db.close()
+
+    # Helper function to convert km to miles
+    def km_to_miles(km: int) -> int:
+        return int(km * 0.621371)
+
+    # API Endpoints
+    @app.get("/")
+    def read_root():
+        return {"message": "Car Finder API", "version": "1.0.0"}
+
+    @app.get("/cars", response_model=List[CarResponse])
+    def get_cars(limit: int = 9, db: Session = Depends(get_db)):
+        cars = db.query(Car).order_by(Car.created_at.desc()).limit(limit).all()
+        return cars
+
+    @app.get("/cars/{car_id}", response_model=CarResponse)
+    def get_car(car_id: int, db: Session = Depends(get_db)):
+        car = db.query(Car).filter(Car.id == car_id).first()
+        if car is None:
+            raise HTTPException(status_code=404, detail="Car not found")
+        return car
+
+    @app.post("/cars", response_model=CarResponse)
+    def create_car(car: CarCreate, db: Session = Depends(get_db)):
+        # Calculate miles from km
+        mileage_miles = km_to_miles(car.mileage_km)
+        
+        db_car = Car(
+            brand=car.brand,
+            model=car.model,
+            series=car.series,
+            year=car.year,
+            mileage_km=car.mileage_km,
+            mileage_miles=mileage_miles,
+            engine_cm3=car.engine_cm3,
+            car_status=car.car_status,
+            location_status=car.location_status,
+            price=car.price,
+            photos=[]
+        )
+        
+        db.add(db_car)
+        db.commit()
+        db.refresh(db_car)
+        return db_car
+
+    @app.put("/cars/{car_id}", response_model=CarResponse)
+    def update_car(car_id: int, car: CarCreate, db: Session = Depends(get_db)):
+        db_car = db.query(Car).filter(Car.id == car_id).first()
+        if db_car is None:
+            raise HTTPException(status_code=404, detail="Car not found")
+        
+        # Update fields
+        db_car.brand = car.brand
+        db_car.model = car.model
+        db_car.series = car.series
+        db_car.year = car.year
+        db_car.mileage_km = car.mileage_km
+        db_car.mileage_miles = km_to_miles(car.mileage_km)
+        db_car.engine_cm3 = car.engine_cm3
+        db_car.car_status = car.car_status
+        db_car.location_status = car.location_status
+        db_car.price = car.price
+        
+        db.commit()
+        db.refresh(db_car)
+        return db_car
+
+    @app.post("/cars/{car_id}/photos")
+    async def upload_car_photo(car_id: int, file: UploadFile = File(...), db: Session = Depends(get_db)):
+        # Check if car exists
+        db_car = db.query(Car).filter(Car.id == car_id).first()
+        if db_car is None:
+            raise HTTPException(status_code=404, detail="Car not found")
+        
+        # Validate file type
+        if not file.content_type.startswith('image/'):
+            raise HTTPException(status_code=400, detail="File must be an image")
+        
+        # Check Cloud Storage availability
+        if storage_client is None or bucket is None:
+            raise HTTPException(status_code=503, detail="Photo upload service unavailable")
+        
+        # Generate unique filename
+        import uuid
+        file_extension = file.filename.split('.')[-1] if '.' in file.filename else 'jpg'
+        unique_filename = f"car_{car_id}_{uuid.uuid4()}.{file_extension}"
+        
+        try:
+            # Upload to Cloud Storage
+            blob = bucket.blob(unique_filename)
+            contents = await file.read()
+            blob.upload_from_string(contents, content_type=file.content_type)
+            
+            # Get public URL (bucket should be publicly accessible)
+            photo_url = f"https://storage.googleapis.com/{BUCKET_NAME}/{unique_filename}"
+            
+            # Update car photos in database
+            if db_car.photos is None:
+                db_car.photos = []
+            db_car.photos = db_car.photos + [photo_url]
+            
+            db.commit()
+            db.refresh(db_car)
+            
+            return {"message": "Photo uploaded successfully", "photo_url": photo_url}
+        
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Failed to upload photo: {str(e)}")
+
+    @app.delete("/cars/{car_id}/photos/{photo_index}")
+    def delete_car_photo(car_id: int, photo_index: int, db: Session = Depends(get_db)):
+        # Check if car exists
+        db_car = db.query(Car).filter(Car.id == car_id).first()
+        if db_car is None:
+            raise HTTPException(status_code=404, detail="Car not found")
+        
+        # Check if photo exists
+        if not db_car.photos or photo_index >= len(db_car.photos) or photo_index < 0:
+            raise HTTPException(status_code=404, detail="Photo not found")
+        
+        # Check Cloud Storage availability
+        if storage_client is None or bucket is None:
+            raise HTTPException(status_code=503, detail="Photo delete service unavailable")
+        
+        try:
+            # Extract filename from URL and delete from Cloud Storage
+            photo_url = db_car.photos[photo_index]
+            filename = photo_url.split('/')[-1]
+            blob = bucket.blob(filename)
+            if blob.exists():
+                blob.delete()
+            
+            # Remove from database
+            photos_list = list(db_car.photos)
+            photos_list.pop(photo_index)
+            db_car.photos = photos_list
+            
+            db.commit()
+            
+            return {"message": "Photo deleted successfully"}
+        
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Failed to delete photo: {str(e)}")
+
+    @app.delete("/cars/{car_id}")
+    def delete_car(car_id: int, db: Session = Depends(get_db)):
+        db_car = db.query(Car).filter(Car.id == car_id).first()
+        if db_car is None:
+            raise HTTPException(status_code=404, detail="Car not found")
+        
+        db.delete(db_car)
+        db.commit()
+        return {"message": "Car deleted successfully"}
+
+    if __name__ == "__main__":
+        import uvicorn
+        uvicorn.run(app, host="0.0.0.0", port=8000)

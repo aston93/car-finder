@@ -1,0 +1,74 @@
+name: Dependency Updates
+
+on:
+  schedule:
+    # Run weekly on Sundays at 2 AM UTC
+    - cron: '0 2 * * 0'
+  workflow_dispatch: # Allow manual trigger
+
+jobs:
+  update-dependencies:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        token: ${{ secrets.GITHUB_TOKEN }}
+    
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+    
+    - name: Setup Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+    
+    - name: Update frontend dependencies
+      run: |
+        cd frontend
+        npm update
+        npm audit fix || echo "Audit fix completed"
+    
+    - name: Update backend dependencies
+      run: |
+        cd backend
+        pip install --upgrade pip
+        pip list --outdated --format=freeze | grep -v '^\-e' | cut -d = -f 1 | xargs -n1 pip install -U || echo "Python updates completed"
+        pip freeze > requirements.txt
+    
+    - name: Check for security vulnerabilities
+      run: |
+        cd frontend
+        npm audit --audit-level=high || echo "Frontend audit completed"
+        
+        cd ../backend
+        pip install safety
+        safety check || echo "Backend safety check completed"
+    
+    - name: Create Pull Request
+      uses: peter-evans/create-pull-request@v5
+      with:
+        token: ${{ secrets.GITHUB_TOKEN }}
+        commit-message: 'chore: update dependencies'
+        title: 'Automated Dependency Updates'
+        body: |
+          ## Automated Dependency Updates
+          
+          This PR contains automated updates to project dependencies.
+          
+          ### Changes:
+          - Updated frontend npm packages
+          - Updated backend Python packages
+          - Security vulnerability fixes where applicable
+          
+          ### Review Checklist:
+          - [ ] Frontend still builds successfully
+          - [ ] Backend still starts without errors
+          - [ ] Tests pass
+          - [ ] No breaking changes introduced
+          
+          🤖 This PR was created automatically by GitHub Actions.
+        branch: dependency-updates
+        delete-branch: true
