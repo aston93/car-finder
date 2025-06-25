@@ -21,7 +21,9 @@ class TestPhotoUpload:
         file_content = b"fake image content"
         files = {"file": ("test.jpg", io.BytesIO(file_content), "image/jpeg")}
         
-        response = client.post(f"/cars/{car.id}/photos", files=files)
+        # Mock the bucket attribute in main module
+        with patch('main.bucket', mock_storage_client['bucket']):
+            response = client.post(f"/cars/{car.id}/photos", files=files)
         
         assert response.status_code == status.HTTP_200_OK
         data = response.json()
@@ -70,12 +72,14 @@ class TestPhotoUpload:
         
         # Upload first photo
         file1 = {"file": ("test1.jpg", io.BytesIO(b"image1"), "image/jpeg")}
-        response1 = client.post(f"/cars/{car.id}/photos", files=file1)
+        with patch('main.bucket', mock_storage_client['bucket']):
+            response1 = client.post(f"/cars/{car.id}/photos", files=file1)
         assert response1.status_code == status.HTTP_200_OK
         
         # Upload second photo
         file2 = {"file": ("test2.jpg", io.BytesIO(b"image2"), "image/jpeg")}
-        response2 = client.post(f"/cars/{car.id}/photos", files=file2)
+        with patch('main.bucket', mock_storage_client['bucket']):
+            response2 = client.post(f"/cars/{car.id}/photos", files=file2)
         assert response2.status_code == status.HTTP_200_OK
         
         # Verify both photos are stored
@@ -114,7 +118,8 @@ class TestPhotoDelete:
         initial_photo_count = len(car.photos)
         photo_to_delete_index = 0
         
-        response = client.delete(f"/cars/{car.id}/photos/{photo_to_delete_index}")
+        with patch('main.bucket', mock_storage_client['bucket']):
+            response = client.delete(f"/cars/{car.id}/photos/{photo_to_delete_index}")
         
         assert response.status_code == status.HTTP_200_OK
         assert "photo deleted successfully" in response.json()["message"].lower()
@@ -186,7 +191,8 @@ class TestPhotoDelete:
         test_db.refresh(car)
         
         # Delete middle photo (index 1)
-        response = client.delete(f"/cars/{car.id}/photos/1")
+        with patch('main.bucket', mock_storage_client['bucket']):
+            response = client.delete(f"/cars/{car.id}/photos/1")
         
         assert response.status_code == status.HTTP_200_OK
         
