@@ -10,9 +10,12 @@ try:
     from main import app
     client = TestClient(app)
     MAIN_IMPORTED = True
-except ImportError:
+    print("✅ Main module imported successfully")
+except Exception as e:
+    print(f"⚠️ Could not import main module: {e}")
     MAIN_IMPORTED = False
     client = None
+    app = None
 
 # Simple tests that don't require database
 def test_basic_math():

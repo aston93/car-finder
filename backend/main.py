@@ -1,8 +1,7 @@
 from fastapi import FastAPI, HTTPException, Depends, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import create_engine, Column, Integer, String, Float, DateTime, JSON
-from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import sessionmaker, Session
+from sqlalchemy.orm import declarative_base, sessionmaker, Session
 from pydantic import BaseModel
 from datetime import datetime
 from typing import Optional, List
@@ -63,11 +62,17 @@ Base.metadata.create_all(bind=engine)
 
 # Cloud Storage setup
 BUCKET_NAME = "car-finder-dev-photos"
-storage_client = storage.Client()
-bucket = storage_client.bucket(BUCKET_NAME)
+try:
+    storage_client = storage.Client()
+    bucket = storage_client.bucket(BUCKET_NAME)
+    print("✅ Google Cloud Storage initialized successfully")
+except Exception as e:
+    print(f"⚠️ Could not initialize Google Cloud Storage: {e}")
+    storage_client = None
+    bucket = None
 
 # FastAPI app
-app = FastAPI(title="Car Finder API", version="1.0.0")
+app = FastAPI(title="Car Finder API", version="1.0.1")
 
 # CORS middleware
 app.add_middleware(
