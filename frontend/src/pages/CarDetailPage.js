@@ -9,20 +9,20 @@ function CarDetailPage() {
   const [error, setError] = useState(null);
 
   useEffect(() => {
+    const loadCarDetails = async () => {
+      try {
+        const data = await getCarById(id);
+        setCar(data);
+      } catch (error) {
+        console.error('Błąd ładowania szczegółów:', error);
+        setError('Nie udało się załadować szczegółów samochodu');
+      } finally {
+        setLoading(false);
+      }
+    };
+
     loadCarDetails();
   }, [id]);
-
-  const loadCarDetails = async () => {
-    try {
-      const data = await getCarById(id);
-      setCar(data);
-    } catch (error) {
-      console.error('Błąd ładowania szczegółów:', error);
-      setError('Nie udało się załadować szczegółów samochodu');
-    } finally {
-      setLoading(false);
-    }
-  };
 
   const formatPrice = (price) => {
     return new Intl.NumberFormat('pl-PL', {

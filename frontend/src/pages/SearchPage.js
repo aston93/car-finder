@@ -17,6 +17,19 @@ function SearchPage() {
   });
 
   useEffect(() => {
+    const handleInitialSearch = async (searchFilters) => {
+      setLoading(true);
+      try {
+        const data = await searchCars(searchFilters);
+        setCars(data);
+      } catch (error) {
+        console.error('Błąd wyszukiwania:', error);
+        setCars([]);
+      } finally {
+        setLoading(false);
+      }
+    };
+
     // Load URL parameters
     const urlParams = new URLSearchParams(window.location.search);
     const initialFilters = { ...filters };
@@ -28,8 +41,8 @@ function SearchPage() {
     });
     
     setFilters(initialFilters);
-    handleSearch(initialFilters);
-  }, []);
+    handleInitialSearch(initialFilters);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
