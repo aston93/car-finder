@@ -2,21 +2,20 @@ name: CI/CD Pipeline
 
 on:
   push:
-    branches: [ main, develop ]
+    branches: [ main ]
   pull_request:
     branches: [ main ]
-
-env:
-  PROJECT_ID: car-finder-dev
-  GKE_CLUSTER: dev-gke-cluster
-  GKE_ZONE: europe-west4-a
 
 jobs:
   test-frontend:
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./frontend
     
     steps:
-    - uses: actions/checkout@v4
+    - name: Checkout code
+      uses: actions/checkout@v4
     
     - name: Setup Node.js
       uses: actions/setup-node@v4
@@ -26,25 +25,25 @@ jobs:
         cache-dependency-path: frontend/package-lock.json
     
     - name: Install dependencies
-      run: |
-        cd frontend
-        npm ci
+      run: npm ci
     
     - name: Run tests
-      run: |
-        cd frontend
-        npm test -- --passWithNoTests --coverage=false
+      run: npm test -- --watchAll=false --coverage=false --verbose
+      env:
+        CI: true
     
-    - name: Build frontend
-      run: |
-        cd frontend
-        npm run build
+    - name: Build project
+      run: npm run build
 
   test-backend:
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./backend
     
     steps:
-    - uses: actions/checkout@v4
+    - name: Checkout code
+      uses: actions/checkout@v4
     
     - name: Setup Python
       uses: actions/setup-python@v4
@@ -53,21 +52,17 @@ jobs:
     
     - name: Install dependencies
       run: |
-        cd backend
         python -m pip install --upgrade pip
         pip install -r requirements.txt
-        pip install pytest pytest-cov
+        pip install pytest httpx
     
     - name: Run tests
-      run: |
-        cd backend
-        pytest test_main.py -v
+      run: pytest test_main.py -v --tb=short
     
-    - name: Lint Python code
+    - name: Lint code
       run: |
-        cd backend
         pip install flake8
-        flake8 main.py --max-line-length=120 --ignore=E501 || echo "Linting completed with warnings"
+        flake8 main.py --max-line-length=120 --ignore=E501,W503 || true
 
   deploy:
     needs: [test-frontend, test-backend]
@@ -75,67 +70,41 @@ jobs:
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     
     steps:
-    - uses: actions/checkout@v4
+    - name: Checkout code
+      uses: actions/checkout@v4
     
     - name: Setup Google Cloud CLI
       uses: google-github-actions/setup-gcloud@v1
       with:
         service_account_key: ${{ secrets.GCP_SA_KEY }}
-        project_id: ${{ env.PROJECT_ID }}
+        project_id: car-finder-dev
+        export_default_credentials: true
     
-    - name: Get GKE credentials
+    - name: Configure kubectl
       run: |
-        gcloud container clusters get-credentials "$GKE_CLUSTER" --zone "$GKE_ZONE"
+        gcloud container clusters get-credentials dev-gke-cluster \
+          --zone=europe-west4-a \
+          --project=car-finder-dev
     
     - name: Update ConfigMaps
       run: |
-        # Update configmaps with latest code
-        kubectl apply -f k8s/frontend/configmap.yaml || echo "Frontend configmap update attempted"
-        kubectl apply -f k8s/backend/configmap.yaml || echo "Backend configmap update attempted"
+        kubectl apply -f k8s/backend/configmap.yaml
+        kubectl apply -f k8s/frontend/configmap.yaml
     
     - name: Restart Deployments
       run: |
-        # Restart deployments to pick up new configmaps
-        kubectl rollout restart deployment/car-finder-frontend || echo "Frontend restart attempted"
-        kubectl rollout restart deployment/car-finder-backend || echo "Backend restart attempted"
-        
-        # Wait for rollouts with timeout
-        kubectl rollout status deployment/car-finder-frontend --timeout=120s || echo "Frontend rollout timeout"
-        kubectl rollout status deployment/car-finder-backend --timeout=120s || echo "Backend rollout timeout"
+        kubectl rollout restart deployment/car-finder-backend
+        kubectl rollout restart deployment/car-finder-frontend
     
-    - name: Verify Services
+    - name: Wait for rollout
       run: |
-        # Get service status
-        kubectl get services
+        kubectl rollout status deployment/car-finder-backend --timeout=180s
+        kubectl rollout status deployment/car-finder-frontend --timeout=180s
+    
+    - name: Verify deployment
+      run: |
         kubectl get pods
-        
-        # Get external IPs
-        FRONTEND_IP=$(kubectl get service car-finder-frontend-service -o jsonpath='{.status.loadBalancer.ingress[0].ip}' 2>/dev/null || echo "34.34.95.85")
-        BACKEND_IP=$(kubectl get service car-finder-backend-service -o jsonpath='{.status.loadBalancer.ingress[0].ip}' 2>/dev/null || echo "34.12.88.58")
-        
-        echo "✅ Frontend: http://$FRONTEND_IP"
-        echo "✅ Backend: http://$BACKEND_IP:8000"
-        
-        # Simple health check with timeout
-        echo "Testing backend health..."
-        timeout 30 curl -f "http://$BACKEND_IP:8000/" || echo "Backend check completed"
-
-  notification:
-    needs: [deploy]
-    runs-on: ubuntu-latest
-    if: always() && github.ref == 'refs/heads/main'
-    
-    steps:
-    - name: Notify deployment status
-      run: |
-        if [ "${{ needs.deploy.result }}" == "success" ]; then
-          echo "🎉 Deployment completed successfully!"
-          echo "🌐 Frontend: http://34.34.95.85"
-          echo "🔧 Backend: http://34.12.88.58:8000"
-          echo "📊 Health: http://34.12.88.58:8000/health"
-        else
-          echo "⚠️ Deployment completed with warnings - check logs"
-          echo "🌐 Services should still be accessible"
-        fi
-        
-        echo "✅ Workflow completed!"
+        kubectl get services
+        echo "✅ Deployment completed!"
+        echo "🌐 Frontend: http://34.34.95.85"
+        echo "🔧 Backend: http://34.12.88.58:8000"
