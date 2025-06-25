@@ -30,7 +30,7 @@ jobs:
         CI: true
     
     - name: Upload frontend coverage to GitHub
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: frontend-coverage
         path: frontend/coverage/
@@ -62,7 +62,7 @@ jobs:
       run: pytest tests/ test_main.py -v --tb=short --cov=main --cov-report=xml --cov-report=html --cov-fail-under=80
     
     - name: Upload backend coverage to GitHub
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: backend-coverage
         path: backend/htmlcov/
