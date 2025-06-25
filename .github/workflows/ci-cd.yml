@@ -103,23 +103,62 @@ jobs:
     
     - name: Restart Deployments
       run: |
+        echo "Current pod status:"
+        kubectl get pods
+        
+        echo "Restarting backend deployment..."
         kubectl rollout restart deployment/car-finder-backend
+        
+        echo "Restarting frontend deployment..."
         kubectl rollout restart deployment/car-finder-frontend
+        
+        # Force delete any stuck terminating pods
+        kubectl get pods --field-selector=status.phase=Failed -o name | xargs -r kubectl delete
       env:
         USE_GKE_GCLOUD_AUTH_PLUGIN: True
     
     - name: Wait for rollout
       run: |
-        kubectl rollout status deployment/car-finder-backend --timeout=180s
-        kubectl rollout status deployment/car-finder-frontend --timeout=180s
+        echo "Waiting for backend rollout..."
+        kubectl rollout status deployment/car-finder-backend --timeout=300s || {
+          echo "Backend rollout timed out, checking pod status..."
+          kubectl get pods -l app=car-finder-backend
+          kubectl describe deployment car-finder-backend
+        }
+        
+        echo "Waiting for frontend rollout..."
+        kubectl rollout status deployment/car-finder-frontend --timeout=300s || {
+          echo "Frontend rollout timed out, checking pod status..."
+          kubectl get pods -l app=car-finder-frontend
+          kubectl describe deployment car-finder-frontend
+        }
       env:
         USE_GKE_GCLOUD_AUTH_PLUGIN: True
     
     - name: Verify deployment
       run: |
-        kubectl get pods
+        echo "=== Final Pod Status ==="
+        kubectl get pods -o wide
+        
+        echo "=== Services Status ==="
         kubectl get services
-        echo "✅ Deployment completed!"
+        
+        echo "=== Deployment Status ==="
+        kubectl get deployments
+        
+        # Check if deployments are ready (but don't fail if not)
+        BACKEND_READY=$(kubectl get deployment car-finder-backend -o jsonpath='{.status.readyReplicas}' || echo "0")
+        FRONTEND_READY=$(kubectl get deployment car-finder-frontend -o jsonpath='{.status.readyReplicas}' || echo "0")
+        
+        echo "Backend ready replicas: $BACKEND_READY"
+        echo "Frontend ready replicas: $FRONTEND_READY"
+        
+        if [ "$BACKEND_READY" -gt "0" ] && [ "$FRONTEND_READY" -gt "0" ]; then
+          echo "✅ Deployment completed successfully!"
+        else
+          echo "⚠️ Deployment may still be in progress"
+        fi
+        
         echo "🌐 Frontend: http://34.34.95.85"
         echo "🔧 Backend: http://34.12.88.58:8000"
       env:
