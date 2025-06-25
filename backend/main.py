@@ -93,7 +93,11 @@ def km_to_miles(km: int) -> int:
 # API Endpoints
 @app.get("/")
 def read_root():
-    return {"message": "Car Finder API", "version": "1.0.0"}
+    return {"message": "Car Finder API", "version": "1.0.1", "status": "healthy"}
+
+@app.get("/health")
+def health_check():
+    return {"status": "ok", "version": "1.0.1", "timestamp": datetime.utcnow().isoformat()}
 
 @app.get("/cars", response_model=List[CarResponse])
 def get_cars(db: Session = Depends(get_db)):
