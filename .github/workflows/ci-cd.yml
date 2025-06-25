@@ -78,6 +78,8 @@ jobs:
     
     - name: Setup Google Cloud CLI
       uses: google-github-actions/setup-gcloud@v2
+      with:
+        install_components: 'gke-gcloud-auth-plugin'
     
     - name: Authenticate with service account
       run: |
@@ -89,21 +91,29 @@ jobs:
         gcloud container clusters get-credentials dev-gke-cluster \
           --zone=europe-west4-a \
           --project=car-finder-dev
+      env:
+        USE_GKE_GCLOUD_AUTH_PLUGIN: True
     
     - name: Update ConfigMaps
       run: |
         kubectl apply -f k8s/backend/configmap.yaml
         kubectl apply -f k8s/frontend/configmap.yaml
+      env:
+        USE_GKE_GCLOUD_AUTH_PLUGIN: True
     
     - name: Restart Deployments
       run: |
         kubectl rollout restart deployment/car-finder-backend
         kubectl rollout restart deployment/car-finder-frontend
+      env:
+        USE_GKE_GCLOUD_AUTH_PLUGIN: True
     
     - name: Wait for rollout
       run: |
         kubectl rollout status deployment/car-finder-backend --timeout=180s
         kubectl rollout status deployment/car-finder-frontend --timeout=180s
+      env:
+        USE_GKE_GCLOUD_AUTH_PLUGIN: True
     
     - name: Verify deployment
       run: |
@@ -112,3 +122,5 @@ jobs:
         echo "✅ Deployment completed!"
         echo "🌐 Frontend: http://34.34.95.85"
         echo "🔧 Backend: http://34.12.88.58:8000"
+      env:
+        USE_GKE_GCLOUD_AUTH_PLUGIN: True
