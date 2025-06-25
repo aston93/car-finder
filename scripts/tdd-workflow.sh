@@ -48,7 +48,7 @@ run_frontend_tests() {
     # Install dependencies if needed
     if [ ! -d "node_modules" ]; then
         echo "Installing npm dependencies..."
-        npm ci
+        npm install
     fi
     
     echo "Running Jest tests with coverage..."

@@ -105,6 +105,9 @@ pytest -m "integration"
 ```bash
 cd frontend
 
+# Install dependencies first
+npm install
+
 # Run all tests with coverage
 npm test -- --coverage --watchAll=false
 
