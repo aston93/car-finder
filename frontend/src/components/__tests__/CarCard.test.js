@@ -113,7 +113,7 @@ describe('CarCard', () => {
       const carWithDecimal = { ...mockCar, price: 95000.50 };
       renderCarCard(carWithDecimal);
       
-      expect(screen.getByText(/95 001/)).toBeInTheDocument(); // PLN formatting rounds up
+      expect(screen.getByText(/95 000,5/)).toBeInTheDocument(); // PLN formatting uses comma for decimals
     });
   });
 
